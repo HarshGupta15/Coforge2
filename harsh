@@ -1,0 +1,75 @@
+import os
+import pandas as pd
+import numpy as np
+from sqlalchemy import create_engine, text
+
+# Set Kaggle API credentials (make sure kaggle.json is in ~/.kaggle or set env vars)
+os.environ['KAGGLE_USERNAME'] = 'harshvardhangupta'  # <-- Replace with your Kaggle username
+os.environ['KAGGLE_KEY'] = '92531d9172dfa0850eda4c9b026380bc'            # <-- Replace with your Kaggle API key
+
+import shutil
+
+#Download the dataset using Kaggle API if kaggle is installed
+if shutil.which("kaggle") is not None:
+    os.system('kaggle datasets download -d gauravpathak1789/yellow-tripdata-2020-01 --unzip -p ./data')
+    print ("Dataset downloaded and unzipped")
+else:
+    print("Error: 'kaggle' command not found. Please install Kaggle CLI and ensure it's in your PATH.")
+    
+# Find the CSV file (adjust filename if needed)
+csv_path = 'D:\OneDrive - Coforge Limited\Desktop\harsh\data\yellow_tripdata_2020-01 (1).csv'
+
+# Check if the CSV file exists before loading
+if not os.path.exists(csv_path):
+    raise FileNotFoundError(f"CSV file not found at {csv_path}. Please ensure the dataset is downloaded and unzipped correctly.")
+
+# Load data
+df = pd.read_csv(csv_path)
+
+print(f"Total rows fetched: {len(df)}")
+
+# Example transformation: drop duplicates by 'VendorID'
+df = df.drop_duplicates(subset="VendorID")
+
+# Example transformation: add log of trip_distance
+df["trip_distance_log"] = df["trip_distance"].apply(lambda x: np.log(x) if x > 0 else None)
+
+# Example normalization
+if "total_amount" in df.columns:
+    df["total_amount_normalized"] = (df["total_amount"] - df["total_amount"].mean()) / df["total_amount"].std()
+
+print("Transformations applied")
+print(df.head(5))
+
+# Save DataFrame to MySQL
+mssql_engine_str = "mysql+mysqlconnector://root:H%40rsh15.2%40%402@localhost/harshapi"
+engine = create_engine(mssql_engine_str)
+df.to_sql("yellow_tripdata", engine, if_exists="replace", index=False)
+print("Data inserted into MySQL")
+
+# Query row count from MySQL
+with engine.connect() as conn:
+    result = conn.execute(text("SELECT COUNT(*) FROM yellow_tripdata"))
+    print("MySQL row count:", result.scalar())
+
+    import matplotlib.pyplot as plt
+
+    # Plot histogram of trip_distance
+    plt.figure(figsize=(8, 5))
+    df["trip_distance"].hist(bins=50, color='skyblue', edgecolor='black')
+    plt.title("Distribution of Trip Distance")
+    plt.xlabel("Trip Distance")
+    plt.ylabel("Frequency")
+    plt.grid(axis='y', alpha=0.75)
+    plt.tight_layout()
+    plt.show()
+
+    # Plot scatter plot of trip_distance vs total_amount
+    if "total_amount" in df.columns:
+        plt.figure(figsize=(8, 5))
+        plt.scatter(df["trip_distance"], df["total_amount"], alpha=0.5)
+        plt.title("Trip Distance vs Total Amount")
+        plt.xlabel("Trip Distance")
+        plt.ylabel("Total Amount")
+        plt.tight_layout()
+        plt.show()
