@@ -1,0 +1,151 @@
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+3. Load Dataset
+# Load CSV into Pandas
+df = pd.read_csv("C:/sparkdata/yellow_tripdata_2024-01.csv")
+
+print("Initial DataFrame shape:", df.shape)
+print(df.head())
+
+4. Clean Data
+# Remove invalid fares or distances
+df_clean = df[(df["fare_amount"] > 0) & (df["trip_distance"] > 0)]
+
+5. Transformations
+# Add new column: fare per mile
+df_clean["fare_per_mile"] = df_clean["fare_amount"] / (df_clean["trip_distance"] + 0.1)
+
+6. Aggregation
+# Group by passenger count and calculate average distance and fare
+agg_df = df_clean.groupby("passenger_count")[["trip_distance", "fare_amount"]].mean().reset_index()
+print(agg_df)
+
+7. Visualization with Matplotlib
+# Bar plot: Avg fare per passenger count
+plt.figure(figsize=(8, 5))
+plt.bar(agg_df["passenger_count"], agg_df["fare_amount"], color="skyblue")
+plt.xlabel("Passenger Count")
+plt.ylabel("Average Fare")
+plt.title("Average Fare by Passenger Count")
+plt.show()
+
+# Scatter plot: Trip Distance vs Fare
+plt.figure(figsize=(8, 5))
+plt.scatter(df_clean["trip_distance"][:5000], df_clean["fare_amount"][:5000], alpha=0.3)
+plt.xlabel("Trip Distance")
+plt.ylabel("Fare Amount")
+plt.title("Fare vs Distance (Sample 5k)")
+plt.show()
+
+
+------------------------------------------------------------
+
+Dataset Used
+We’ll use NYC Yellow Taxi dataset (public dataset).
+•	Link: https://www.nyc.gov/assets/tlc/downloads/pdf/trip_record_data_dictionary.pdf
+•	Sample file: yellow_tripdata_2024-01.csv
+Download it and place in your working directory (e.g., C:\sparkdata\yellow_tripdata_2024-01.csv).
+
+5. Example Code (with Imports Included)
+from pyspark import SparkContext
+from pyspark.sql import SparkSession, functions as F
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import LinearRegression
+import findspark
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Initialize findspark
+findspark.init()
+
+# Start SparkSession
+spark = SparkSession.builder.appName("NYC Taxi Demo").getOrCreate()
+
+# 1. Load dataset
+df = spark.read.csv("C:/sparkdata/yellow_tripdata_2024-01.csv", header=True, inferSchema=True)
+
+# 2. Clean data
+df_clean = df.filter((df.fare_amount > 0) & (df.trip_distance > 0))
+
+# 3. Basic Transformations
+df_clean = df_clean.withColumn("fare_per_mile", df_clean.fare_amount / (df_clean.trip_distance + 0.1))
+
+# 4. Aggregation
+agg_df = df_clean.groupBy("passenger_count").avg("trip_distance", "fare_amount")
+agg_df.show()
+
+# 5. Machine Learning (Predict tips)
+assembler = VectorAssembler(inputCols=["trip_distance", "fare_amount"], outputCol="features")
+data_ml = assembler.transform(df_clean.select("trip_distance", "fare_amount", "tip_amount").na.drop())
+
+train, test = data_ml.randomSplit([0.7, 0.3])
+lr = LinearRegression(featuresCol="features", labelCol="tip_amount")
+model = lr.fit(train)
+
+print("Model Coefficients:", model.coefficients)
+print("Model Intercept:", model.intercept)
+
+
+-------------------------------------------
+
+from pyspark.sql import SparkSession
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import LinearRegression
+import findspark
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Initialize findspark
+findspark.init()
+
+# Start SparkSession
+spark = SparkSession.builder.appName("NYC Taxi Demo").getOrCreate()
+
+# 1. Load dataset
+df = spark.read.csv("C:/sparkdata/yellow_tripdata_2024-01.csv", header=True, inferSchema=True)
+
+# 2. Clean data
+df_clean = df.filter((df.fare_amount > 0) & (df.trip_distance > 0))
+
+# 3. Basic Transformations
+df_clean = df_clean.withColumn("fare_per_mile", df_clean.fare_amount / (df_clean.trip_distance + 0.1))
+
+# 4. Aggregation
+agg_df = df_clean.groupBy("passenger_count").avg("trip_distance", "fare_amount")
+
+# ---- Pagination for viewing ----
+page_size = 10
+rows = agg_df.collect()  # small result, safe to collect
+for i in range(0, len(rows), page_size):
+    page = rows[i:i+page_size]
+    print("\n--- Page", i//page_size + 1, "---")
+    for row in page:
+        print(row)
+    if i + page_size < len(rows):
+        input("Press Enter to see next page...")
+
+# ---- Graph (save as PNG instead of plt.show()) ----
+pdf = agg_df.toPandas()
+plt.figure(figsize=(8, 5))
+plt.bar(pdf["passenger_count"], pdf["avg(fare_amount)"])
+plt.xlabel("Passenger Count")
+plt.ylabel("Average Fare Amount")
+plt.title("Average Fare by Passenger Count")
+plt.tight_layout()
+plt.savefig("C:/sparkdata/agg_plot.png")   # saves plot
+print(" Graph saved to C:/sparkdata/agg_plot.png")
+
+# 5. Machine Learning (Predict tips)
+assembler = VectorAssembler(inputCols=["trip_distance", "fare_amount"], outputCol="features")
+data_ml = assembler.transform(df_clean.select("trip_distance", "fare_amount", "tip_amount").na.drop())
+
+train, test = data_ml.randomSplit([0.7, 0.3])
+lr = LinearRegression(featuresCol="features", labelCol="tip_amount")
+model = lr.fit(train)
+
+print("\nModel Coefficients:", model.coefficients)
+print("Model Intercept:", model.intercept)
+
+
